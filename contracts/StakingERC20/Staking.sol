@@ -9,7 +9,9 @@ import "@openzeppelin-contracts/Ownable.sol";
  * 
  * @dev Stakers can redeem reward tokens, restake rewards for extra rewards  OR claim rewards and unstake after a certain amount of days
  * 
- * @dev Reward System will be implemented within this contract or Proxies
+ * @dev Reward System will be implemented within this contract 
+ * 
+ * @dev V2 Reward system will implement factory pattern
  */
 
 contract Staking {
@@ -20,7 +22,6 @@ contract Staking {
      */
 
     using Strings for uint256;
-    // uint256 public contractBalance;
     uint256 private rewardsPercentage = 0.05;
     uint256 public initialTimestamp;
     uint256 public timePeriod;
@@ -58,6 +59,13 @@ contract Staking {
 
     mapping (address => Staker) public stakers;
 
+    function setTimestamp(uint256 _timePeriodInSeconds) public onlyOwner {
+         require(timestampSet == false, "The time stamp has already been set.");
+        timestampSet = true;
+        initialTimestamp = block.timestamp;
+        timePeriod = initialTimestamp + timePeriodInSeconds;
+    }
+
     function _getRewards (uint256 _amount) internal view return (uint256) {
         return rewardsPercentage * _amount;
     } 
@@ -68,6 +76,7 @@ contract Staking {
      * @dev will calculate rewards according to 'amount' of tokens staked
      */
     function stakeTokens(IERC20 token, uint256 amount) external public returns (bool) {
+        require(timestampSet == true, "Cannot stake, staking period not yet specified");
         require(amount <= IERC20(tokenContract).balanceOf(msg.sender), "You do not have enough funds to stake!");
 
     // if staker already exists, update stake amount, time and recalculate % rewards 
@@ -110,10 +119,13 @@ contract Staking {
 
     /**
      * @dev calls IERC20 mint on the rewards token to the address of the claimer based on their % of rewards
+     * @dev Rewards can only be claimed halfway through the staking period
      */
     function claimRewards() external public returns (bool) {
+        require(block.timestamp >= timePeriod/2, "Staking period not yet over, try again later");
         require(staker[msg.sender].rewards > 0, "You cannot claim rewards at this time");
         require(staker[msg.sender].isStaked == true, "Cannot claim rewards, not active staker");
+
         IERC20(erc20RewardToken).mint(msg.sender, staker[msg.sender].rewards);
         staker[msg.sender].rewards = 0;
         return true;
@@ -126,6 +138,10 @@ contract Staking {
 
     function getIndividualStakerBalance () external public view returns (uint256) {
         return stakers[msg.sender].amount;
+    }
+
+    function setRewardsPercentage (uint8 _percentage) public view onlyOwner {
+        rewardsPercentage = _percentage;
     }
 
 }
