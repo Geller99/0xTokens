@@ -41,6 +41,20 @@ The general approach to supplying rewards is calling the mint function on an ext
 
 
 
+
+## Deployment V1 ##
+
+To deploy these contracts and engage the in-built staking-rewards mechanism, follow these steps:
+
+- Deploy Staking.sol contract to your Network of Choice
+- Open RewardToken of choice with the access control 
+- Pass in address of Staking.sol as a "minter" role in the Reward Token's Constructor
+- Deploy RewardToken
+- Setup Proper custom timers, and reward percentage **feel free to modify contract in that regard**
+- Start Staking!
+- Enjoy!
+
+
 ## Contributors
 
 Geller Micael

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
-import "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../utils/IERC20.sol";
 import "@openzeppelin-contracts/contracts/Strings.sol";
 import "@openzeppelin-contracts/Ownable.sol";
 
@@ -39,6 +39,8 @@ contract Staking {
     event RewardClaimed(address indexed claimer, uint256 amount);
 
     error StakingFailed();
+    error UnStakingFailed();
+    error RewardsClaimFailed();
     
     constructor(IERC20 erc20TokenAddress, IERC20 rewardTokenAddress) {
         owner = msg.sender;
@@ -46,10 +48,7 @@ contract Staking {
         timestampSet = false;
         // Set the erc20 contract address 
         require(address(erc20TokenAddress) != address(0), "Please enter a valid token address");
-        require(address(rewardTokenAddress) != address(0), "Please enter a valid token address");
         erc20TokenContract = erc20TokenAddress;
-        erc20RewardToken = rewardTokenAddress;
-
     }
     // Staker Data
     struct Staker {
@@ -72,6 +71,13 @@ contract Staking {
         return rewardsPercentage * _amount;
     } 
 
+    /**
+     * @dev sets the contract address of the reward token after deployment
+     */
+    function setRewardTokenAddress (address calldata _tokenAddress) public onlyOwner returns (bool) {
+        erc20RewardToken = _tokenAddress;
+        return true;
+    }
 
     /**
      * @dev implements staking mechanism for by calling interface methods of the IERC20 standard
@@ -82,10 +88,11 @@ contract Staking {
         require(amount <= IERC20(erc20TokenContract).balanceOf(msg.sender), "You do not have enough funds to stake!");
 
     // if staker already exists, update stake amount, time and recalculate % rewards 
+    // time in seconds  = 6 * 24 * 60 * 60;
         if (stakers[msg.sender].isStaked == true ) {            
             token.transferFrom(msg.sender, address(this), amount);
             stakers[msg.sender].amount += amount;
-            stakers[msg.sender].stakeTime += 6000;
+            stakers[msg.sender].stakeTime += 518400;
             stakers[msg.sender].rewards += _getRewards(stakers[msg.sender].amount);
             
         } else {
@@ -93,7 +100,7 @@ contract Staking {
         if (!success) {
             revert StakingFailed();
         }
-        Staker memory newStaker = Staker(amount, 6000, _getRewards(amount), true);
+        Staker memory newStaker = Staker(amount, 518400, _getRewards(amount), true);
         stakers[msg.sender] = newStaker;
         }
 
