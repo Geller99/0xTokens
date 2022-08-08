@@ -14,7 +14,7 @@ import "@openzeppelin-contracts/Ownable.sol";
  * @dev V2 Reward system will implement factory pattern
  */
 
-contract Staking {
+contract Staking is Ownable {
     /**
      * @dev sets up time tracking mechanisms
      * 
@@ -23,7 +23,6 @@ contract Staking {
 
     using Strings for uint256;
     bool public timestampSet;
-    address public owner;
     uint256 private rewardsPercentage = 5;
     uint256 public initialTimestamp;
     uint256 public timePeriod;
@@ -42,29 +41,30 @@ contract Staking {
     error UnStakingFailed();
     error RewardsClaimFailed();
     
-    constructor(IERC20 erc20TokenAddress, IERC20 rewardTokenAddress) {
-        owner = msg.sender;
-        // Timestamp values not set yet
-        timestampSet = false;
+    constructor(IERC20 erc20TokenAddress) {
         // Set the erc20 contract address 
         require(address(erc20TokenAddress) != address(0), "Please enter a valid token address");
         erc20TokenContract = erc20TokenAddress;
     }
     // Staker Data
     struct Staker {
-        uint256 amount;
-        uint256 stakeTime;
-        uint256 rewards;
+        uint32 stakeTime;
+        uint64 rewards;
         bool isStaked;
+        uint256 amount;
     }
 
     mapping (address => Staker) public stakers;
 
     function setTimestamp(uint256 _timePeriodInSeconds) public onlyOwner {
-        require(timestampSet == false, "The time stamp has already been set.");
+        require(timePeriod  < block.timestamp, "Current Stake Cycle is still active");
         timestampSet = true;
         initialTimestamp = block.timestamp;
         timePeriod = initialTimestamp + _timePeriodInSeconds;
+    }
+
+    function resetTimeStamp() public onlyOwner {
+        timestampSet = false;
     }
 
     function _getRewards (uint256 _amount) internal view returns (uint256) {
@@ -83,34 +83,31 @@ contract Staking {
      * @dev implements staking mechanism for by calling interface methods of the IERC20 standard
      * @dev will calculate rewards according to 'amount' of tokens staked
      */
-    function stakeTokens(IERC20 token, uint256 amount)  public returns (bool) {
+    function stakeTokens(IERC20 token, uint256 amount) public {
+        require(amount > 0, "You cannot stake zero tokens!");
         require(timestampSet == true, "Cannot stake, staking period not yet specified");
-        require(amount <= IERC20(erc20TokenContract).balanceOf(msg.sender), "You do not have enough funds to stake!");
+        require(token == IERC20(erc20TokenContract), "Wrong token, please stake the specified token only");
 
-    // if staker already exists, update stake amount, time and recalculate % rewards 
-    // time in seconds  = 6 * 24 * 60 * 60;
         if (stakers[msg.sender].isStaked == true ) {            
             token.transferFrom(msg.sender, address(this), amount);
             stakers[msg.sender].amount += amount;
-            stakers[msg.sender].stakeTime += 518400;
+            stakers[msg.sender].stakeTime += 6 days;
             stakers[msg.sender].rewards += _getRewards(stakers[msg.sender].amount);
-            
         } else {
         bool success = token.transferFrom(msg.sender, address(this), amount);
         if (!success) {
             revert StakingFailed();
         }
-        Staker memory newStaker = Staker(amount, 518400, _getRewards(amount), true);
-        stakers[msg.sender] = newStaker;
+        stakers[msg.sender]= Staker(amount, 518400, _getRewards(amount), true);
         }
-
         emit TokensStaked(msg.sender, amount);
-        return true;
     } 
 
-    function unStakeToken(IERC20 token, uint256 amount) public returns (bool) {
+    function unStakeToken(uint256 amount) public returns (bool) {
         require(stakers[msg.sender].isStaked == true, "You cannot unstake at this time");
+        require(stakers[msg.sender].stakeTime > timePeriod, "Your staking period is not yet over");
         require(stakers[msg.sender].amount > 0, "You do not have any tokens staked");
+        require(amount > 0, "You cannot unstake zero tokens");
 
         /**
          * @dev autoclaims rewards if staker forgot to claim rewards before unstaking
@@ -119,9 +116,14 @@ contract Staking {
         if (block.timestamp >= timePeriod) {
             if (stakers[msg.sender].rewards > 0) claimRewards();
             stakers[msg.sender].amount -= amount;
-            stakers[msg.sender].amount < 1 ? stakers[msg.sender].isStaked = false : stakers[msg.sender].isStaked = true;
-            stakers[msg.sender].amount < 1 ? stakers[msg.sender].rewards = 0 : stakers[msg.sender].rewards = _getRewards(stakers[msg.sender].amount) ;
-            token.transfer(msg.sender, amount);
+            if (stakers[msg.sender].amount < 1) {
+                stakers[msg.sender].isStaked = false;
+                stakers[msg.sender].rewards = 0;
+            } else {
+                 stakers[msg.sender].isStaked = true;
+                 stakers[msg.sender].rewards = _getRewards(stakers[msg.sender].amount) ;
+            }
+            erc20RewardToken.transfer(msg.sender, amount);
             emit TokensUnstaked(msg.sender, amount);
         } else {
             revert("Tokens are only available after correct time period has elapsed");
@@ -133,14 +135,14 @@ contract Staking {
      * @dev calls IERC20 mint on the rewards token to the address of the claimer based on their % of rewards
      * @dev Rewards can only be claimed halfway through the staking period
      */
-    function claimRewards() public returns (bool) {
+    function claimRewards() public {
         require(block.timestamp >= timePeriod/2, "Staking period not yet over, try again later");
         require(stakers[msg.sender].rewards > 0, "You cannot claim rewards at this time");
         require(stakers[msg.sender].isStaked == true, "Cannot claim rewards, not active staker");
 
         // IERC20(erc20RewardToken).mint(msg.sender, stakers[msg.sender].rewards);
-        stakers[msg.sender].rewards = 0;
-        return true;
+        emit RewardClaimed(msg.sender, stakers[msg.sender].rewards);
+        stakers[msg.sender].rewards = 0;     
     }
 
 
