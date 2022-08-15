@@ -5,6 +5,24 @@ import "@openzeppelin-contracts/contracts/Strings.sol";
 import "@openzeppelin-contracts/Ownable.sol";
 
 /**
+ * @DEV Marks contract as UNAUDITED and unsafe for production until official reviews from Hwonder and Squeebo_nft 
+ * 
+ * 
+ * 
+ * @DEV Is not Liable for this contract being used in production and any faults in the current V1 development stage
+ * 
+ * 
+ * 
+ * 
+ * @DEV Will be updating main branch with production-ready versions in the near future
+ * 
+ * 
+ * 
+ * 
+ * @DEV highlights the claimRewards() function as unfinished and consequently unsafe.
+ */
+
+/**
  * @dev is a contract for staking ERC20 tokens for a specific amount of time for rewards
  * 
  * @dev Stakers can redeem reward tokens, restake rewards for extra rewards  OR claim rewards and unstake after a certain amount of days
@@ -98,7 +116,7 @@ contract Staking is Ownable {
         if (!success) {
             revert StakingFailed();
         }
-        stakers[msg.sender]= Staker(amount, 518400, _getRewards(amount), true);
+        stakers[msg.sender]= Staker(amount, 6 days, _getRewards(amount), true);
         }
         emit TokensStaked(msg.sender, amount);
     } 
@@ -124,6 +142,7 @@ contract Staking is Ownable {
                  stakers[msg.sender].rewards = _getRewards(stakers[msg.sender].amount) ;
             }
             erc20RewardToken.transfer(msg.sender, amount);
+            stakers[msg.sender].stakeTime = 0 days;
             emit TokensUnstaked(msg.sender, amount);
         } else {
             revert("Tokens are only available after correct time period has elapsed");
@@ -136,11 +155,12 @@ contract Staking is Ownable {
      * @dev Rewards can only be claimed halfway through the staking period
      */
     function claimRewards() public {
-        require(block.timestamp >= timePeriod/2, "Staking period not yet over, try again later");
+        require(block.timestamp >= timePeriod, "Staking period not yet over, try again later");
         require(stakers[msg.sender].rewards > 0, "You cannot claim rewards at this time");
         require(stakers[msg.sender].isStaked == true, "Cannot claim rewards, not active staker");
 
-        // IERC20(erc20RewardToken).mint(msg.sender, stakers[msg.sender].rewards);
+        IERC20(erc20RewardToken).mint(msg.sender, stakers[msg.sender].rewards);
+
         emit RewardClaimed(msg.sender, stakers[msg.sender].rewards);
         stakers[msg.sender].rewards = 0;     
     }
