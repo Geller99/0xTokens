@@ -17,7 +17,7 @@ ERC721
 - NFT Staking Contracts
 - NFT Vaulting Contracts
 - NFT LandSale Contracts
-- NFT On-Chain Contracts
+- NFT On-Chain Governance Contracts
 - Coverage and Benchmarking
 
 
